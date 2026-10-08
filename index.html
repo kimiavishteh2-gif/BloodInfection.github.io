@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sepsis Watch Board</title>
+<meta name="description" content="Hour-by-hour replay of a research sepsis score on held-out ICU records from the PhysioNet 2019 Challenge, with alert policy, drivers and model evaluation. Research only, not for patient care.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="masthead">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <div>
+      <h1>Sepsis Watch Board</h1>
+      <p class="brand-sub">Research replay of the PhysioNet 2019 ICU records &middot; hospital B, never used for training</p>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <a href="#monitor" role="tab" id="tab-monitor" aria-controls="view-monitor">Monitor</a>
+    <a href="#performance" role="tab" id="tab-performance" aria-controls="view-performance">Performance</a>
+    <a href="#about" role="tab" id="tab-about" aria-controls="view-about">About</a>
+  </nav>
+</header>
+
+<div class="banner" role="note">
+  <strong>Not for patient care.</strong> This is a retrospective research simulator. The score estimates the PhysioNet 2019 benchmark label. It is not a validated diagnostic or a clinical probability.
+</div>
+
+<main>
+  <!-- MONITOR -->
+  <section id="view-monitor" class="view" role="tabpanel" aria-labelledby="tab-monitor">
+    <div class="controls">
+      <div class="clock">
+        <span class="eyebrow">Replay clock</span>
+        <span class="clock-value"><span id="clock-hour">0</span><small> h since replay start</small></span>
+      </div>
+      <div class="transport">
+        <button type="button" id="btn-reset" class="btn ghost" title="Back to hour 0">Reset</button>
+        <button type="button" id="btn-back" class="btn" title="Step back one hour">&minus;1 h</button>
+        <button type="button" id="btn-play" class="btn primary" aria-pressed="false">Play</button>
+        <button type="button" id="btn-fwd" class="btn" title="Step forward one hour">+1 h</button>
+        <label class="speed" for="speed">Speed
+          <select id="speed">
+            <option value="1200">1 h / 1.2 s</option>
+            <option value="600" selected>1 h / 0.6 s</option>
+            <option value="250">1 h / 0.25 s</option>
+          </select>
+        </label>
+      </div>
+      <input type="range" id="scrub" min="0" max="96" value="0" aria-label="Replay hour">
+      <label class="toggle" for="show-labels">
+        <input type="checkbox" id="show-labels">
+        <span>Show retrospective labels</span>
+      </label>
+    </div>
+
+    <div class="summary" id="summary" aria-live="polite"></div>
+
+    <div class="board-layout">
+      <div class="board-col">
+        <div class="section-head">
+          <h2>Beds</h2>
+          <p class="hint" id="policy-line"></p>
+        </div>
+        <div class="board" id="board"></div>
+        <div class="legend-states" id="legend-states"></div>
+      </div>
+      <aside class="detail" id="detail" aria-live="polite"></aside>
+    </div>
+
+    <div class="section-head">
+      <h2>Alert log</h2>
+      <p class="hint">Alerts emitted by the frozen policy up to the current replay hour. Acknowledging records a simulated review only; it never changes the score.</p>
+    </div>
+    <div class="table-wrap"><table class="log" id="alert-log"></table></div>
+  </section>
+
+  <!-- PERFORMANCE -->
+  <section id="view-performance" class="view" role="tabpanel" aria-labelledby="tab-performance" hidden>
+    <div class="section-head">
+      <h2>Promoted model at two hospitals</h2>
+      <p class="hint" id="promoted-line"></p>
+    </div>
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid-2">
+      <figure class="panel">
+        <figcaption><h3>Calibration</h3><p>Mean predicted score against the observed positive-hour rate, by score bin. Points on the diagonal are well calibrated. Bins with fewer than 50 hours are hidden.</p></figcaption>
+        <div id="chart-reliability" class="chart"></div>
+      </figure>
+      <figure class="panel">
+        <figcaption><h3>Alert budget trade-off</h3><p>Policies searched on hospital A validation data. Fewer alerts per 100 patient-days buy precision at the cost of early detection. The primary budget is 10.</p></figcaption>
+        <div id="chart-budgets" class="chart"></div>
+      </figure>
+    </div>
+
+    <div class="section-head"><h2>All runs</h2><p class="hint">Hospital A internal test and hospital B external test. Utility is the official PhysioNet 2019 normalised utility; intervals are 95% record-level bootstrap.</p></div>
+    <div class="table-wrap"><table class="data" id="runs-table"></table></div>
+
+    <div class="grid-2">
+      <figure class="panel">
+        <figcaption><h3>What the model relies on</h3><p>Share of model importance by feature family, from TreeSHAP on hospital A validation rows.</p></figcaption>
+        <div id="chart-families" class="chart"></div>
+      </figure>
+      <figure class="panel">
+        <figcaption><h3>Top features and their shift at hospital B</h3><p>Missingness in hospital A training data against hospital B. Large gaps flag charting habits that may not transfer.</p></figcaption>
+        <div class="table-wrap"><table class="data compact" id="features-table"></table></div>
+      </figure>
+    </div>
+
+    <div class="section-head"><h2>Subgroups</h2><p class="hint">Hourly AUROC with 95% intervals. Gender uses the source dataset code (0 = female, 1 = male).</p></div>
+    <div id="chart-subgroups" class="chart wide"></div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="view-about" class="view prose" role="tabpanel" aria-labelledby="tab-about" hidden>
+    <h2>What this page shows</h2>
+    <p>The <strong>Monitor</strong> replays 24 ICU stays from hospital B of the PhysioNet/Computing in Cardiology Challenge 2019 one hour at a time. Each bed shows the research score from the promoted model, the alert-policy state, the measurements behind the score and the strongest drivers. The records were sampled with a fixed seed (10 stays that meet the challenge sepsis definition, 14 that do not), so you can see hits, misses and false alarms side by side.</p>
+    <p>Scores were computed offline by the research pipeline and exported to static files. Nothing here is live patient data. The page has no server and sends nothing anywhere.</p>
+
+    <h2>How the score and alerts work</h2>
+    <ul>
+      <li><strong>Target.</strong> The supplied <code>SepsisLabel</code>, which turns positive 6 hours before the challenge-defined onset. The onset marker is that first positive hour plus 6.</li>
+      <li><strong>Features.</strong> Causal only: the row for hour <em>t</em> uses that stay's measurements up to <em>t</em>. Vital-sign windows, lab values and changes, partial SOFA components, and measurement-pattern features such as hours since a test was last charted.</li>
+      <li><strong>Model.</strong> A 3-seed bag of LightGBM models trained on hospital A, calibrated on a separate hospital A slice.</li>
+      <li><strong>Alert policy.</strong> A versioned state machine (monitoring, alerted, acknowledged, cooldown, data unavailable) with its threshold chosen on hospital A validation data for a budget of 10 alerts per 100 patient-days.</li>
+      <li><strong>Data unavailable.</strong> Hours without any valid vital sign are never shown as low risk.</li>
+      <li><strong>Drivers.</strong> TreeSHAP contributions on the log-odds scale. They describe associations the model uses. They are not causes or treatment advice.</li>
+    </ul>
+
+    <h2>Limits</h2>
+    <ul>
+      <li>Every model lost accuracy at the new hospital. At the chosen alert budget the model warns early for about one septic patient in nine at hospital B.</li>
+      <li>Measurement-pattern features can encode local ordering habits. The top driver, hours since FiO2 was last charted, is a workflow signal, not physiology.</li>
+      <li>The hospital B records were scored in round 1 before the round 2 model was chosen, so round 2 test results are a second look.</li>
+    </ul>
+
+    <h2>Source and citation</h2>
+    <p>Data: <a href="https://physionet.org/content/challenge-2019/1.0.0/">PhysioNet Challenge 2019 v1.0.0</a>, CC BY 4.0. Code and full reports: <a href="https://github.com/amirrezavishteh/Blood-infection">github.com/amirrezavishteh/Blood-infection</a>.</p>
+    <p class="cite">Reyna MA, et al. Early Prediction of Sepsis From Clinical Data: the PhysioNet/Computing in Cardiology Challenge 2019. <em>Crit Care Med</em> 2020;48(2):210&ndash;217.<br>
+    Goldberger A, et al. PhysioBank, PhysioToolkit, and PhysioNet. <em>Circulation</em> 2000;101(23):e215&ndash;e220.</p>
+  </section>
+</main>
+
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+<footer class="foot">Research simulator &middot; PhysioNet 2019 data under CC BY 4.0 &middot; <span id="foot-run"></span></footer>
+<script src="assets/app.js"></script>
+</body>
+</html>
